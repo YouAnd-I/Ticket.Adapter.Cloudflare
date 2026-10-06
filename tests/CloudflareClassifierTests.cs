@@ -9,8 +9,6 @@ namespace Ticket.Adapter.Cloudflare.Tests;
 
 public class CloudflareClassifierTests
 {
-    // Stands in for the whole world: records what the adapter asks,
-    // and lets the test deliver a notification the way the loop would.
     private sealed class RecordingWorld : IWorldClient
     {
         public List<object> Requests { get; } = [];
@@ -41,8 +39,6 @@ public class CloudflareClassifierTests
         }
     }
 
-    // Captures request + body at send time: the adapter disposes its requests
-    // (as it should), so the HttpRequestMessage can't be read afterwards.
     private sealed class StubHttp(params HttpResponseMessage[] replies) : HttpMessageHandler
     {
         public List<(HttpRequestMessage Request, string? Body)> Sent { get; } = [];
@@ -63,7 +59,6 @@ public class CloudflareClassifierTests
         Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json"),
     };
 
-    // A real clef reply (trimmed to what the adapter reads)
     private const string ClefReply =
         """{"result":{"answers":{"priority":{"type":"choice","choice":"no-rush","probabilities":{"urgent":0.05,"no-rush":0.9,"report":0.05},"confidence":0.88}}},"success":true}""";
 
@@ -92,7 +87,6 @@ public class CloudflareClassifierTests
             request.RequestUri!.ToString());
         Assert.Equal("Bearer tok", request.Headers.Authorization!.ToString());
 
-        // clef wants a flat body: model + state + questions, questions keyed by id
         var body = JsonDocument.Parse(raw!).RootElement;
         Assert.Equal("clef", body.GetProperty("model").GetString());
         Assert.Contains("printer on fire", body.GetProperty("state").GetString());
@@ -121,7 +115,7 @@ public class CloudflareClassifierTests
 
         Assert.Null(classified.Priority);
         Assert.True(classified.Offline);
-        Assert.Equal(2, sent.Count); // one retry, like the laya adapter before it
+        Assert.Equal(2, sent.Count);
     }
 
     [Fact]

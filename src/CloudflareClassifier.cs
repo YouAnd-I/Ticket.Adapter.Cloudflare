@@ -6,9 +6,6 @@ using Ticket.Data;
 
 namespace Ticket.Adapter.Cloudflare;
 
-// Everything one classifier call needs. FromEnvironment reads what the
-// composition root (or the Aspire AppHost) sets: Cloudflare__AccountId /
-// Cloudflare__ApiToken.
 public sealed record ClefOptions(string AccountId, string ApiToken, string Model = "clef")
 {
     public static ClefOptions FromEnvironment() => new(
@@ -16,12 +13,6 @@ public sealed record ClefOptions(string AccountId, string ApiToken, string Model
         Environment.GetEnvironmentVariable("Cloudflare__ApiToken") ?? "");
 }
 
-// The world's priority classifier, as an adapter: the TicketSystem asks for a
-// classification (a PriorityClassifyRequested notification); this asks the
-// Cloudflare Workers AI clef model and answers the world with a
-// PriorityClassified request. When Cloudflare is unreachable — or no token is
-// configured — the world is told so (Offline) and defaults to urgent; the bot
-// keeps working either way.
 public static class CloudflareClassifier
 {
     public static void AddCloudflareClassifier(this IWorldClient world) =>
@@ -44,10 +35,6 @@ public static class CloudflareClassifier
         }, timeout.Token).ConfigureAwait(false);
     }
 
-    // clef — https://developers.cloudflare.com/workers-ai/models/clef/ — one
-    // choice question. The body is flat (no `input` wrapper, unlike most Workers
-    // AI models) and `model` is a required field with the bare name. One retry,
-    // null = offline.
     public static async Task<TicketPriority?> ClassifyAsync(HttpClient http, ClefOptions options, string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return TicketPriority.NoRush;
@@ -88,7 +75,6 @@ public static class CloudflareClassifier
                 var res = await http.SendAsync(request).ConfigureAwait(false);
                 var raw = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
                 if (res.IsSuccessStatusCode)
-                    // {"result":{"answers":{"priority":{"choice":"urgent",...}}},"success":true}
                     return JsonDocument.Parse(raw).RootElement
                         .GetProperty("result").GetProperty("answers").GetProperty("priority")
                         .GetProperty("choice").GetString() switch
