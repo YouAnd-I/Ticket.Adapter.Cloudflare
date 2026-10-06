@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Ecs.Client\src\Ecs.Client.csproj" />
+    <ProjectReference Include="..\..\Ticket.Data\src\Ticket.Data.csproj" />
+  </ItemGroup>
+
+</Project>
