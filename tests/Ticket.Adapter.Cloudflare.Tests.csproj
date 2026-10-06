@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\src\Ticket.Adapter.Laya.csproj" />
+    <ProjectReference Include="..\src\Ticket.Adapter.Cloudflare.csproj" />
   </ItemGroup>
 
 </Project>
