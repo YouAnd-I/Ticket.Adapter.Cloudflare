@@ -60,7 +60,7 @@ public class CloudflareClassifierTests
     };
 
     private const string ClefReply =
-        """{"result":{"answers":{"priority":{"type":"choice","choice":"no-rush","probabilities":{"urgent":0.05,"no-rush":0.9,"report":0.05},"confidence":0.88}}},"success":true}""";
+        """{"result":{"answers":{"priority":{"type":"choice","choice":"no-rush","probabilities":{"urgent":0.05,"no-rush":0.9,"report":0.05},"confidence":0.88},"category":{"type":"choice","choice":"hardware","confidence":0.9}}},"success":true}""";
 
     private static async Task<(PriorityClassified Classified, List<(HttpRequestMessage Request, string? Body)> Sent)> RunAsync(
         ClefOptions options, params HttpResponseMessage[] replies)
@@ -68,7 +68,13 @@ public class CloudflareClassifierTests
         var world = new RecordingWorld();
         var handler = new StubHttp(replies);
         world.AddCloudflareClassifier(new HttpClient(handler), options);
-        await world.Raise(new PriorityClassifyRequested { TicketId = "t1", Text = "printer on fire" });
+        await world.Raise(new PriorityClassifyRequested
+        {
+            TicketId = "t1",
+            Text = "printer on fire",
+            Categories = [new TicketCategory("hardware", "printers, laptops, peripherals")],
+            NowUtc = "2026-10-07 09:00:00Z",
+        });
         return (Assert.IsType<PriorityClassified>(world.Requests.Single()), handler.Sent);
     }
 
@@ -80,6 +86,7 @@ public class CloudflareClassifierTests
         Assert.Equal(TicketPriority.NoRush, classified.Priority);
         Assert.False(classified.Offline);
         Assert.Equal("t1", classified.TicketId);
+        Assert.Equal("hardware", classified.Category);
 
         var (request, raw) = Assert.Single(sent);
         Assert.Equal(
@@ -90,11 +97,31 @@ public class CloudflareClassifierTests
         var body = JsonDocument.Parse(raw!).RootElement;
         Assert.Equal("clef", body.GetProperty("model").GetString());
         Assert.Contains("printer on fire", body.GetProperty("state").GetString());
+        Assert.Contains("2026-10-07 09:00:00Z", body.GetProperty("state").GetString());
         var question = body.GetProperty("questions").GetProperty("priority");
         Assert.Equal("choice", question.GetProperty("type").GetString());
         Assert.True(question.GetProperty("criteria").TryGetProperty("urgent", out _));
         Assert.True(question.GetProperty("criteria").TryGetProperty("no-rush", out _));
         Assert.True(question.GetProperty("criteria").TryGetProperty("report", out _));
+        var categoryQuestion = body.GetProperty("questions").GetProperty("category");
+        Assert.Equal("choice", categoryQuestion.GetProperty("type").GetString());
+        Assert.Equal("printers, laptops, peripherals",
+            categoryQuestion.GetProperty("criteria").GetProperty("hardware").GetString());
+        Assert.True(categoryQuestion.GetProperty("criteria").TryGetProperty("uncategorized", out _));
+    }
+
+    [Fact]
+    public async Task WithoutCategories_NoCategoryQuestion_IsSent()
+    {
+        var world = new RecordingWorld();
+        var handler = new StubHttp(Json(ClefReply));
+        world.AddCloudflareClassifier(new HttpClient(handler), new ClefOptions("acct", "tok"));
+        await world.Raise(new PriorityClassifyRequested { TicketId = "t1", Text = "printer on fire" });
+
+        var body = JsonDocument.Parse(handler.Sent[0].Body!).RootElement;
+        Assert.False(body.GetProperty("questions").TryGetProperty("category", out _));
+        var classified = Assert.IsType<PriorityClassified>(world.Requests.Single());
+        Assert.Null(classified.Category);
     }
 
     [Fact]
