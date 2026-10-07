@@ -31,7 +31,7 @@ public static class CloudflareClassifier
         {
             TicketId = notification.TicketId,
             Priority = classified?.Priority,
-            Category = classified?.Category,
+            AssigneeStaffId = classified?.AssigneeStaffId,
             Offline = classified is null,
         }, timeout.Token).ConfigureAwait(false);
     }
@@ -74,11 +74,13 @@ public static class CloudflareClassifier
                         "report" => TicketPriority.Report,
                         _ => TicketPriority.Urgent,
                     };
-                    var category = notification.Categories is { Length: > 0 } &&
-                        answers.TryGetProperty("category", out var categoryAnswer)
-                        ? categoryAnswer.GetProperty("choice").GetString()
+                    var assignee = notification.AvailableStaff is { Length: > 0 } &&
+                        answers.TryGetProperty("assignee", out var assigneeAnswer)
+                        ? notification.AvailableStaff
+                            .FirstOrDefault(staff => staff.StaffId == assigneeAnswer.GetProperty("choice").GetString())
+                            ?.StaffId
                         : null;
-                    return new PriorityClassified { Priority = priority, Category = category };
+                    return new PriorityClassified { Priority = priority, AssigneeStaffId = assignee };
                 }
                 Console.WriteLine($"[cloudflare] HTTP {(int)res.StatusCode}: {raw}");
             }
@@ -93,33 +95,31 @@ public static class CloudflareClassifier
 
     private static object Questions(PriorityClassifyRequested notification)
     {
+        var source = notification.Priorities is { Length: > 0 }
+            ? notification.Priorities
+            : PriorityGuidance.Defaults;
+        var options = source.Where(option => !string.IsNullOrWhiteSpace(option.Code)).ToArray();
+        if (options.Length < 2) options = [.. PriorityGuidance.Defaults];
         var priority = new
         {
             type = "choice",
             instructions = "How should this support ticket be prioritized?",
-            criteria = new Dictionary<string, string>
-            {
-                ["urgent"] = "Something is broken, failing, or blocking the user right now",
-                ["no-rush"] = "A question or a request that can wait; nothing is failing",
-                ["report"] = "The user reports something that needs investigating or documenting, not an immediate fix",
-            },
+            criteria = options.ToDictionary(
+                option => option.Code,
+                option => string.IsNullOrWhiteSpace(option.Description) ? option.Code : option.Description),
         };
-        if (notification.Categories is not { Length: > 0 })
+        if (notification.AvailableStaff is not { Length: >= 2 })
             return new { priority };
 
-        var category = new
+        var assignee = new
         {
             type = "choice",
-            instructions = "Which category fits this ticket best?",
-            criteria = notification.Categories
-                .Select(category_ => KeyValuePair.Create(
-                    category_.Slug,
-                    string.IsNullOrWhiteSpace(category_.Description)
-                        ? category_.Slug
-                        : category_.Description))
-                .Append(KeyValuePair.Create("uncategorized", "None of the categories fit"))
+            instructions = "Which on-duty IT staff member should this ticket go to?",
+            criteria = notification.AvailableStaff.Select(staff => KeyValuePair.Create(
+                    staff.StaffId,
+                    string.IsNullOrWhiteSpace(staff.Handles) ? staff.Name : $"{staff.Name} — {staff.Handles}"))
                 .ToDictionary(),
         };
-        return new { priority, category };
+        return new { priority, assignee };
     }
 }
