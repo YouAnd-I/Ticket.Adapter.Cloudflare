@@ -111,7 +111,7 @@ public class CloudflareClassifierTests
         Assert.Equal("Something is broken, failing, or blocking the user right now",
             priority.GetProperty("criteria").GetProperty("urgent").GetString());
         Assert.True(priority.GetProperty("criteria").TryGetProperty("no-rush", out _));
-        Assert.True(priority.GetProperty("criteria").TryGetProperty("report", out _));
+        Assert.False(priority.GetProperty("criteria").TryGetProperty("report", out _));
         Assert.False(questions.TryGetProperty("assignee", out _));
     }
 
@@ -122,7 +122,7 @@ public class CloudflareClassifierTests
             Notification(priorities:
             [
                 new PriorityOption("urgent", "mention me immediately, always"),
-                new PriorityOption("report", ""),
+                new PriorityOption("critical", ""),
             ]),
             Json("""{"result":{"answers":{"priority":{"choice":"urgent"}}},"success":true}"""));
 
@@ -131,7 +131,7 @@ public class CloudflareClassifierTests
         var criteria = JsonDocument.Parse(sent.Single().Body!).RootElement
             .GetProperty("questions").GetProperty("priority").GetProperty("criteria");
         Assert.Equal("mention me immediately, always", criteria.GetProperty("urgent").GetString());
-        Assert.Equal("report", criteria.GetProperty("report").GetString());
+        Assert.Equal("critical", criteria.GetProperty("critical").GetString());
         Assert.False(criteria.TryGetProperty("no-rush", out _));
     }
 

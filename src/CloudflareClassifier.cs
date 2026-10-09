@@ -71,7 +71,6 @@ public static class CloudflareClassifier
                     var priority = answers.GetProperty("priority").GetProperty("choice").GetString() switch
                     {
                         "no-rush" => TicketPriority.NoRush,
-                        "report" => TicketPriority.Report,
                         _ => TicketPriority.Urgent,
                     };
                     var assignee = notification.AvailableStaff is { Length: > 0 } &&
